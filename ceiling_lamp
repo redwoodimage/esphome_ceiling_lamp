@@ -1,0 +1,1093 @@
+esphome:
+  name: ceiling_lamp
+  platform: ESP32
+  board: esp-wrover-kit
+wifi: 
+  ssid: "xxxx"             # add wifi ssid
+  password: "xxxx"         # add wifi Password
+logger:
+api:
+ota:
+i2c:
+  sda: 21
+  scl: 22
+  scan: True
+####################/ sensor /############################
+sensor:
+  - platform: sht3xd
+    temperature:
+      name: "Lamp Temperature"
+    humidity:
+      name: "Lamp Humidity"
+    address: 0x45
+    update_interval: 30s
+
+  - platform: sun
+    name: Sun Elevation
+    type: elevation
+  - platform: sun
+    name: Sun Azimuth
+    type: azimuth
+#################/ text sensor /##########################   
+text_sensor:
+  - platform: sun
+    name: Sun Next Sunrise
+    type: sunrise
+  - platform: sun
+    name: Sun Next Sunset
+    type: sunset
+sun:
+  latitude: xxxx         # add latitude for sun angle
+  longitude: xxxx        # longitude
+##########################################################
+# At least one time source is required
+time:
+  - platform: homeassistant
+###################/ Touch Sensor /#######################
+esp32_touch:
+  setup_mode: False
+  iir_filter: 10ms
+######################/ remote_receive /##################
+remote_receiver:
+  pin:
+    number: GPIO33
+    inverted: true
+  dump: nec
+#########################/ Script /#######################
+script:
+  - id: celling_lights_flashing_sh
+    then: 
+        - logger.log: "Lights flash"
+        - light.turn_on:  
+            id: l_3
+            brightness: 1
+            transition_length: .25s
+        - delay: .5s
+        - light.turn_off: 
+            id: l_3
+            transition_length: .25s
+        - delay: .5s
+        - light.turn_on:
+            id: l_1
+            brightness: 1
+            transition_length: .25s
+        - light.turn_on:  
+            id: l_4
+            brightness: 1
+            transition_length: .25s
+        - delay: .5s
+        - light.turn_off: 
+            id: l_1
+            transition_length: .25s
+        - light.turn_off:
+            id: l_4
+            transition_length: .25s
+        - delay: .5s
+        - light.turn_on:
+            id: l_1
+            brightness: 1
+            transition_length: .25s
+        - light.turn_on:  
+            id: l_3
+            brightness: 1
+            transition_length: .25s
+        - light.turn_on:  
+            id: l_4
+            brightness: 1
+            transition_length: .25s
+        - delay: .5s
+        - light.turn_off: 
+            id:  l_1
+            transition_length: .25s
+        - light.turn_off: 
+            id: l_3
+            transition_length: .25s
+        - light.turn_off:
+            id: l_4
+            transition_length: .25s
+        - delay: .5s
+######################/ Global Var /######################
+globals:
+   - id: glob_var
+     type: float 
+     restore_value: no
+     initial_value: '0.05'
+   - id: glob_var2
+     type: float 
+     restore_value: no
+     initial_value: '.2'
+   - id: glob_var3
+     type: float 
+     restore_value: no
+     initial_value: '1'
+##########################################################
+
+##########################################################
+#                    OUTPUT                              #
+##########################################################
+output:
+  - platform: ledc
+    pin: GPIO27
+    frequency: 6000
+    channel: 0
+    id: light_1
+  - platform: ledc
+    pin: GPIO25
+    frequency: 6000
+    channel: 1
+    id: light_2
+  - platform: ledc
+    pin: GPIO32
+    frequency: 6000
+    channel: 2
+    id: light_3
+  - platform: ledc
+    pin: GPIO26
+    frequency: 6000
+    channel: 3
+    id: light_4
+##########################################################
+
+##########################################################
+#                    BINARY SENNSOR                      #
+##########################################################
+binary_sensor:
+
+
+
+#####################/ Touch Sensor /#####################
+  - platform: esp32_touch
+    name: "ESP32 Touch Pad GPIO4"
+    pin: GPIO04
+    threshold: 400
+    on_press:
+      then: 
+        - lambda: |- 
+            if (id(glob_var) < 1) {
+              id(glob_var) += 0.1;
+            } else { id(glob_var) = 0;
+            
+            }
+        - output.set_level:
+            id: light_1
+            level: !lambda 'return id(glob_var);'
+        - delay: 0.01s
+        - output.set_level:
+            id: light_3
+            level: !lambda 'return id(glob_var);'
+        - delay: 0.01s
+        - output.set_level:
+            id: light_4
+            level: !lambda 'return id(glob_var);'
+        - delay: 0.01s
+ 
+##########################################################
+
+##########################################################
+#           NEC: address=0x00FF, command=0x              #
+##########################################################
+
+##############/ 44 Keys Remote /##########################
+#     | row 1  |       | 3AC5 | BA45 | 827D | 02FD |     #
+#     ----------------------------------------------     #
+#     | row 2  |       | 1AE5 | 9A65 | A25D | 22DD |     #
+#     ----------------------------------------------     #
+#     | row 3  |       | 2AD5 | AA55 | 926D | 12ED |     #
+#     ----------------------------------------------     #
+#     | row 4  |       | 0AF5 | 8A75 | B24D | 32CD |     #
+#     ----------------------------------------------     #
+#     | row 5  |       | 38C7 | B847 | 7887 | F807 |     #
+#     ----------------------------------------------     #
+#     | row 6  |       | 18E7 | 9867 | 58A7 | D827 |     #
+#     ----------------------------------------------     #
+#     | row 7  |  up   | 28D7 | A857 | 6897 | E817 |     #
+#     ----------------------------------------------     #
+#     | row 8  |  dn   | 08F7 | 8877 | 48B7 | C837 |     #
+#     ----------------------------------------------     #
+#     | row 9  |  diy1 | 30CF | B04F | 708F | F00F |     #
+#     ----------------------------------------------     #
+#     | row 10 | diy4  | 10EF | 906F | 50AF | D02F |     #
+#     ----------------------------------------------     #
+#     | row 11 |       | 20DF | A05F | 609F | E01F |     #
+##########################################################
+#  Rainbow
+#  Rainbow Custom Values
+#  Slow Random
+#  Slow Random Effect
+#  Fast Random Effect
+#  Addressable Scan
+#  Scan Custom Values
+#  Color Wipe 
+# Color Wipe Custom Values
+# Strobe
+# Strobe Alarm
+# Twinkle    
+# Twinkle Custom Values
+# Fireworks
+# Fireworks Custom Values
+# Flicker
+# Flicker Custom Values
+##########################################################
+#                    remote_receiver                     #
+##########################################################
+
+
+###############/ Celling Lights Flash /###################
+
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: celling_light_flash
+    nec:
+      address: 0x00FF
+      command: 0x8877
+    on_press:
+      then: 
+        - logger.log: "Lights flash For 10s"
+        - script.execute:  celling_lights_flashing_sh
+        - delay: 3s #1
+        - script.execute:  celling_lights_flashing_sh
+        - delay: 3s #2
+        - script.execute:  celling_lights_flashing_sh
+        - delay: 3s #3
+#/ Row 1 /######/ Dim Celling Light Down /###/ 0x3AC5 /###
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: celling_relative_dim_down
+    nec:
+      address: 0x00FF
+      command: 0x3AC5
+    on_press:
+      then: 
+        - lambda: |- 
+            if (id(glob_var) > 0) {
+              id(glob_var) += -0.1;  
+            } else { id(glob_var) = 1;
+            }
+        - output.set_level:
+            id: light_1
+            level: !lambda 'return id(glob_var);'
+        - delay: 0.01s
+        - output.set_level:
+            id: light_3
+            level: !lambda 'return id(glob_var);'
+        - delay: 0.01s
+        - output.set_level:
+            id: light_4
+            level: !lambda 'return id(glob_var);'
+        - delay: 0.01s
+################/ Dim Celling Light Up  /###/ 0xBA45 /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: celling_relative_dim_up
+    nec:
+      address: 0x00FF
+      command: 0xBA45
+    on_press:
+      then: 
+        - lambda: |- 
+            if (id(glob_var) < 1) {
+              id(glob_var) += 0.1;  
+            } else { id(glob_var) = 0;
+            }
+        - output.set_level:
+            id: light_1
+            level: !lambda 'return id(glob_var);'
+        - delay: 0.01s
+        - output.set_level:
+            id: light_3
+            level: !lambda 'return id(glob_var);'
+        - delay: 0.01s
+        - output.set_level:
+            id: light_4
+            level: !lambda 'return id(glob_var);'
+        - delay: 0.01s
+################/ Celling Neo Pixel Off /###/ 0x827D /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: celling_light_off_neo_pixel
+    nec:
+      address: 0x00FF
+      command: 0x827D
+    on_press:
+      then: 
+        - light.turn_on:
+            id: celling_rgb
+            brightness: 100%
+            effect: None
+################/ Celling Lights Off  /#####/ 0x02FD /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: celling_light_off
+    nec:
+      address: 0x00FF
+      command: 0x02FD
+    on_press:
+      then: 
+        - logger.log: "Power Off"
+        - light.turn_off:  l_1
+        - light.turn_off:  l_3
+        - light.turn_off:  l_4
+
+#/  ROW 2  /########/  Neo Pixel  /#########/ 0x1AE5 /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: remote_r_red
+    nec:
+      address: 0x00FF
+      command: 0x1AE5
+    on_press:
+      then: 
+        - light.turn_on:
+            id: celling_rgb
+            brightness: 100%
+            red: 100%
+            green: 0%
+            blue: 0%
+############################################/ 0x9A65 /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: remote_r_green
+    nec:
+      address: 0x00FF
+      command: 0x9A65
+    on_press:
+      then: 
+        - light.turn_on:
+            id: celling_rgb
+            brightness: 100%
+            red: 0%
+            green: 100%
+            blue: 0%
+############################################/ 0xA25D /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: remote_r_blue
+    nec:
+      address: 0x00FF
+      command: 0xA25D
+    on_press:
+      then: 
+        - light.turn_on:
+            id: celling_rgb
+            brightness: 100%
+            red: 0%
+            green: 0%
+            blue: 100%
+############################################/ 0x22DD /####
+
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: remote_r_white
+    nec:
+      address: 0x00FF
+      command: 0x22DD
+    on_press:
+      then:
+        - light.turn_on:
+            id: celling_rgb
+            brightness: 100%
+            red: 100%
+            green: 100%
+            blue: 100%
+
+#/  ROW 3  /########/  Neo Pixel  /#########/ 0x2AD5 /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: remote_r_orange
+    nec:
+      address: 0x00FF
+      command: 0x2AD5
+    on_press:
+      then: 
+        - light.turn_on:
+            id: celling_rgb
+            brightness: 100%
+            red: 100%
+            green: 65%
+            blue: 0%
+############################################/ 0xAA55 /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: remote_r_light_blue
+    nec:
+      address: 0x00FF
+      command: 0xAA55
+    on_press:
+      then: 
+        - light.turn_on:
+            id: celling_rgb
+            brightness: 80%
+            red: 0%
+            green: 100%
+            blue: 100%
+############################################/ 0x926D /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: remote_r_purple
+    nec:
+      address: 0x00FF
+      command: 0x926D
+    on_press:
+      then: 
+        - light.turn_on:
+            id: celling_rgb
+            brightness: 85%
+            red: 60%
+            green: 0%
+            blue: 80%
+############################################/ 0x12ED /####
+
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: remote_r_magenta
+    nec:
+      address: 0x00FF
+      command: 0x12ED
+    on_press:
+      then: 
+        - light.turn_on:
+            id: celling_rgb
+            brightness: 100%
+            red: 100%
+            green: 0%
+            blue: 75%
+
+#/  ROW 4  /########/  Neo Pixel  /#########/ 0x0AF5 /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: remote_r_rainbow
+    nec:
+      address: 0x00FF
+      command: 0x0AF5
+    on_press:
+      then:
+        - light.turn_on:
+            id: celling_rgb
+            brightness: 100%
+            effect: Rainbow 
+############################################/ 0x8A75 /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: remote_r_rainbow_cust
+    nec:
+      address: 0x00FF
+      command: 0x8A75
+    on_press:
+      then: 
+        - light.turn_on:
+            id: celling_rgb
+            brightness: 100%
+            effect: Rainbow Custom Values
+############################################/ 0xB24D /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: remote_r_slow_random
+    nec:
+      address: 0x00FF
+      command: 0xB24D
+    on_press:
+      then:
+        - light.turn_on:
+            id: celling_rgb
+            brightness: 100%
+            effect: Slow Random Effect
+############################################/ 0x32CD /####
+
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: remote_r_fast_random
+    nec:
+      address: 0x00FF
+      command: 0x32CD
+    on_press:
+      then:
+        - light.turn_on:
+            id: celling_rgb
+            brightness: 100%
+            effect: Fast Random Effect
+
+#/  ROW 5  /########/  Neo Pixel  /#########/ 0x38C7 /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: remote_r_addressable_scan
+    nec:
+      address: 0x00FF
+      command: 0x38C7
+    on_press:
+      then: 
+        - light.turn_on:
+            id: celling_rgb
+            brightness: 100%
+            effect: Addressable Scan
+############################################/ 0xB847 /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: remote_r_scan_cust
+    nec:
+      address: 0x00FF
+      command: 0xB847
+    on_press:
+      then: 
+        - light.turn_on:
+            id: celling_rgb
+            brightness: 100%
+            effect: Scan Custom Values
+############################################/ 0x7887 /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: remote_color_wipe
+    nec:
+      address: 0x00FF
+      command: 0x7887
+    on_press:
+      then:
+        - light.turn_on:
+            id: celling_rgb
+            brightness: 100%
+            effect: Color Wipe 
+############################################/ 0xF807 /####
+
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: remote_r_color_wripe_cust
+    nec:
+      address: 0x00FF
+      command: 0xF807
+    on_press:
+      then: 
+        - light.turn_on:
+            id: celling_rgb
+            brightness: 100%
+            effect: Color Wipe Custom Values
+
+#/  ROW 6  /########/  Neo Pixel  /#########/ 0x18E7 /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: remote_r_twinkle
+    nec:
+      address: 0x00FF
+      command: 0x18E7
+    on_press:
+      then:
+        - light.turn_on:
+            id: celling_rgb
+            brightness: 80%
+            effect: Twinkle
+############################################/ 0x9867 /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: remote_r_twinkle_cust
+    nec:
+      address: 0x00FF
+      command: 0x9867
+    on_press:
+      then:
+        - light.turn_on:
+            id: celling_rgb
+            brightness: 80%
+            effect: Twinkle Custom Values
+############################################/ 0x58A7 /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: remote_r_fireworks
+    nec:
+      address: 0x00FF
+      command: 0x58A7
+    on_press:
+      then:
+        - light.turn_on:
+            id: celling_rgb
+            brightness: 100%
+            effect: Fireworks
+############################################/ 0xD827 /####
+
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: remote_r_fireworks_cust
+    nec:
+      address: 0x00FF
+      command: 0xD827
+    on_press:
+      then:
+        - light.turn_on:
+            id: celling_rgb
+            brightness: 100%
+            effect: Fireworks Custom Values
+
+
+
+
+
+
+#/  ROW7  /#################################/ 0x28D7 /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: remote_r_flicker
+    nec:
+      address: 0x00FF
+      command: 0x28D7
+    on_press:
+      then: 
+        - light.turn_on:
+            id: celling_rgb
+            effect: Flicker
+############################################/ 0xA857 /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: remote_r_flicker_cust
+    nec:
+      address: 0x00FF
+      command: 0xA857
+    on_press:
+      then: 
+        - light.turn_on:
+            id: celling_rgb
+            effect: Flicker Custom Values
+############################################/ 0x6897 /####
+
+#############/ Dim Celling NeoPixel Up/#####/ 0xE817 /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: celling_relative_dim_up_neo
+    nec:
+      address: 0x00FF
+      command: 0xE817
+    on_press:
+      then:
+        - light.turn_on:
+            id: celling_rgb
+            brightness:  !lambda 'return id(glob_var2);'
+        - lambda: |- 
+            if (id(glob_var2) <= 0.8) {
+              id(glob_var2) += 0.2;  
+            } else { id(glob_var2) = 0;
+            }
+
+#/  ROW 8  /########/  Neo Pixel  /#########/ 0x08F7 /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: remote_r_neopixel_off
+    nec:
+      address: 0x00FF
+      command: 0x08F7
+    on_press:
+      then: 
+        - light.turn_off: celling_rgb
+######################/ Stobe /#############/ 0x8877 /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: remote_r_strobe
+    nec:
+      address: 0x00FF
+      command: 0x8877
+    on_press:
+      then: 
+        - light.turn_on:
+            id: celling_rgb
+            effect: Strobe
+############################################/ 0x48B7 /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: remote_r_strobe_alarm
+    nec:
+      address: 0x00FF
+      command: 0x48B7
+    on_press:
+      then: 
+        - light.turn_on:
+            id: celling_rgb
+            effect: Strobe Alarm
+#############/ Dim Celling NeoPixel Down/###/ 0xC837 /####
+
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: celling_relative_dim_down_neo
+    nec:
+      address: 0x00FF
+      command: 0xC837
+    on_press:
+      then:
+        - light.turn_on:
+            id: celling_rgb
+            brightness:  !lambda 'return id(glob_var3);'
+        - lambda: |- 
+            if (id(glob_var3) >= 0.2) {
+              id(glob_var3) += -0.2;  
+            } else { id(glob_var3) = 1;
+            }
+#---------------/ Celling Lights /------------------------#
+
+#/  ROW9  /############/ diy 1  /###########/ 0x30CF /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: celling_light_on_full
+    nec:
+      address: 0x00FF
+      command: 0x30CF 
+    on_press:
+      then: 
+        - logger.log: "Power On Full Power 95"
+        - light.turn_on:
+            id: l_1 
+            brightness: 100%      
+        - light.turn_on:
+            id: l_3 
+            brightness: 100%  
+        - light.turn_on:
+            id: l_4 
+            brightness: 100%  
+#######################/ diy 2  /###########/ 0xB04F /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: celling_light_on_70
+    nec:
+      address: 0x00FF
+      command: 0xB04F
+    on_press:
+      then: 
+        - logger.log: "Power On 70 Power"
+        - light.turn_on:
+            id: l_1 
+            brightness: 70%      
+        - light.turn_on:
+            id: l_3 
+            brightness: 70%  
+        - light.turn_on:
+            id: l_4 
+            brightness: 70%  
+#######################/ diy 3  /###########/ 0x708F /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: celling_light_on_60
+    nec:
+      address: 0x00FF
+      command: 0x708F 
+    on_press:
+      then: 
+        - logger.log: "Power On Full Power 60"
+        - light.turn_on:
+            id: l_1 
+            brightness: 60%      
+        - light.turn_on:
+            id: l_3 
+            brightness: 60%  
+        - light.turn_on:
+            id: l_4 
+            brightness: 60%  
+#######################/ auto   /###########/ 0xF00F /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: celling_light_on_35
+    nec:
+      address: 0x00FF
+      command: 0xF00F 
+    on_press:
+      then: 
+        - logger.log: "Power On Full 35"
+        - light.turn_on:
+            id: l_1 
+            brightness: 30%      
+        - light.turn_on:
+            id: l_3 
+            brightness: 30%  
+        - light.turn_on:
+            id: l_4 
+            brightness: 30%  
+
+#/  ROW10  /###########/ diy 4  /###########/ 0x10EF /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: celling_light_on_full_2l
+    nec:
+      address: 0x00FF
+      command: 0x10EF
+    on_press:
+      then: 
+        - logger.log: "Power On Full Power 95"
+        - light.turn_on:
+            id: l_1 
+            brightness: 100%      
+        - light.turn_on:
+            id: l_4
+            brightness: 100%  
+        - light.turn_off: l_3
+#######################/ diy 5  /###########/ 0x906F /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: celling_light_on_70_2l
+    nec:
+      address: 0x00FF
+      command: 0x906F
+    on_press:
+      then: 
+        - logger.log: "Power On 70 Power"
+        - light.turn_on:
+            id: l_1 
+            brightness: 70%
+        - light.turn_on:
+            id: l_4 
+            brightness: 70%
+        - light.turn_off: l_3
+#######################/ diy 6  /###########/ 0x50AF /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: celling_light_on_60_2l
+    nec:
+      address: 0x00FF
+      command: 0x50AF
+    on_press:
+      then: 
+        - logger.log: "Power On Full Power 60"
+        - light.turn_on:
+            id: l_1 
+            brightness: 60%
+        - light.turn_on:
+            id: l_4
+            brightness: 60%
+        - light.turn_off: l_3
+#######################/ flash  /###########/ 0xD02F /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: celling_light_on_35_3l
+    nec:
+      address: 0x00FF
+      command: 0xD02F
+    on_press:
+      then: 
+        - light.turn_on:
+            id: l_1 
+            brightness: 30%
+        - light.turn_on:
+            id: l_4 
+            brightness: 30%
+        - light.turn_off: l_3
+
+#/  ROW11  /###########/ jump 3 /###########/ 0x20DF /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: celling_light_on_full_1l
+    nec:
+      address: 0x00FF
+      command: 0x20DF
+    on_press:
+      then: 
+        - light.turn_on:
+            id: l_3 
+            brightness: 100%
+        - light.turn_off: l_1
+        - light.turn_off: l_4
+#######################/ jump 4 /###########/ 0xA05F /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: celling_light_on_70_1l
+    nec:
+      address: 0x00FF
+      command: 0xA05F
+    on_press:
+      then: 
+        - light.turn_on:
+            id: l_3 
+            brightness: 70%
+        - light.turn_off: l_1
+        - light.turn_off: l_4
+#######################/ fad 3  /###########/ 0x609F /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: celling_light_on_60_1l
+    nec:
+      address: 0x00FF
+      command: 0x609F
+    on_press:
+      then: 
+        - light.turn_on:
+            id: l_3 
+            brightness: 60%
+        - light.turn_off: l_1
+        - light.turn_off: l_4
+#######################/ fad 7  /###########/ 0xE01F /####
+  - platform: remote_receiver
+    name: "NEC Remote Input"
+    id: celling_light_on_35_1l
+    nec:
+      address: 0x00FF
+      command: 0xE01F
+    on_press:
+      then: 
+        - light.turn_on:
+            id: l_3 
+            brightness: 30%
+        - light.turn_off: l_4
+        - light.turn_off: l_1
+############/ status_led /################################
+status_led:
+  pin:
+    number: GPIO2
+    inverted: no
+##########################################################
+#                        Light                           #
+##########################################################
+light:
+  - platform: monochromatic
+    output: light_1
+    name: "Celling Light 1"
+    id: l_1
+  - platform: monochromatic
+    output: light_2
+    name: "Celling Light 2"
+    id: l_2
+  - platform: monochromatic
+    output: light_3
+    name: "Celling Light 3"
+    id: l_3
+  - platform: monochromatic
+    output: light_4
+    name: "Celling Light 4"
+    id: l_4
+##########################################################
+#                     NEO PIXELLighT                     #
+##########################################################
+ 
+  - platform: neopixelbus
+    type: GRB
+    pin: GPIO17
+    num_leds: 24
+    variant: WS2812X
+    id: celling_rgb
+    name: "NeoPixel Lamp"
+    effects:
+      - addressable_rainbow:
+          name: Rainbow
+      - addressable_rainbow:
+          name: Rainbow Custom Values
+          speed: 50
+          width: 6
+      # Use default parameters:
+      - random:
+          name: Slow Random
+      # Customize parameters
+      - random:
+          name: Slow Random Effect
+          transition_length: 30s
+          update_interval: 50s
+      - random:
+          name: Fast Random Effect
+          transition_length: 4s
+          update_interval: 20s
+#---------------------------------------------------------
+      - addressable_scan:
+          name: Addressable Scan
+      - addressable_scan:
+          name: Scan Custom Values
+          move_interval: 100ms
+#------  Color Wipe Effect With Custom Values  -----------
+      - addressable_color_wipe:
+          name: Color Wipe 
+      - addressable_color_wipe:
+          name: Color Wipe Custom Values
+          colors:
+            - red: 100%
+              green: 100%
+              blue: 100%
+              num_leds: 1
+            - red: 0%
+              green: 0%
+              blue: 0%
+              num_leds: 1
+          add_led_interval: 100ms
+          reverse: False
+#------------  Strobe Effect With Custom Values  ---------
+      - strobe:
+          name: Strobe
+      - strobe:
+          name: Strobe Alarm
+          colors:
+            - state: True
+              brightness: 100%
+              red: 0%
+              green: 0
+              blue: 100%
+              duration: 350ms
+              
+            - state: False
+              duration: 150ms
+              brightness: 0%
+              
+            - state: True
+              brightness: 100%
+              red: 100%
+              green: 0%
+              blue: 0%
+              duration: 350ms
+              
+            - state: False
+              duration: 40ms
+              brightness: 0%
+              
+            - state: True
+              brightness: 100%
+              red: 100%
+              green: 100%
+              blue: 100%
+              duration: 35ms
+              
+            - state: False
+              duration: 40ms
+              brightness: 0%
+
+            - state: True
+              brightness: 100%
+              red: 100%
+              green: 100%
+              blue: 100%
+              duration: 35ms
+              
+            - state: False
+              duration: 40ms
+              brightness: 0%
+              
+            - state: True
+              brightness: 100%
+              red: 100%
+              green: 100%
+              blue: 100%
+              duration: 35ms
+              
+            - state: False
+              duration: 40ms
+              brightness: 0%
+              
+            - state: True
+              brightness: 100%
+              red: 100%
+              green: 0%
+              blue: 0%
+              duration: 350ms
+              
+            - state: False
+              duration: 150ms
+              brightness: 0%
+#---------------------------------------------------------
+      - addressable_twinkle:
+          name: Twinkle     
+      - addressable_twinkle:
+          name: Twinkle Custom Values
+          twinkle_probability: 5%
+          progress_interval: 4ms
+#---------------------------------------------------------
+      - addressable_fireworks:
+          name: Fireworks
+      - addressable_fireworks:
+          name: Fireworks Custom Values
+          update_interval: 62ms
+          
+          spark_probability: 20%
+          use_random_color: false
+          fade_out_rate: 60
+#---------------------------------------------------------
+      - addressable_flicker:
+          name: Flicker
+      - addressable_flicker:
+          name: Flicker Custom Values
+          update_interval: 16ms
+          intensity: 5%
+#---------------------------------------------------------
